@@ -35,7 +35,6 @@ import {
 	InteractionType,
 	type MessageFlags,
 	type RESTPostAPIInteractionCallbackJSONBody,
-	type RESTAPIAttachment,
 } from '../types';
 
 import type { RawFile } from '../api';
@@ -125,11 +124,7 @@ export class BaseInteraction<
 		this.user = this.member?.user ?? Transformers.User(client, interaction.user!);
 	}
 
-	static transformBodyRequest(
-		body: ReplyInteractionBody,
-		files: RawFile[] | undefined,
-		self: UsingClient,
-	): APIInteractionResponse {
+	static transformBodyRequest(body: ReplyInteractionBody, self: UsingClient): APIInteractionResponse {
 		switch (body.type) {
 			case InteractionResponseType.ApplicationCommandAutocompleteResult:
 			case InteractionResponseType.DeferredMessageUpdate:
@@ -140,7 +135,7 @@ export class BaseInteraction<
 				return {
 					type: body.type,
 					//@ts-ignore
-					data: BaseInteraction.transformBodyRequest(body.data ?? {}, files, self),
+					data: BaseInteraction.transformBody(body.data ?? {}, self),
 				};
 			}
 			case InteractionResponseType.Modal:
@@ -165,23 +160,21 @@ export class BaseInteraction<
 		}
 	}
 
-	static transformBody<T>(
+	static async transformBody<T = any>(
 		body:
 			| InteractionMessageUpdateBodyRequest
 			| MessageUpdateBodyRequest
 			| MessageCreateBodyRequest
 			| MessageWebhookCreateBodyRequest,
-		files: RawFile[] | undefined,
+
 		self: UsingClient,
 	) {
-		const poll = (body as MessageWebhookCreateBodyRequest).poll;
-
+		const poll = (body as MessageCreateBodyRequest).poll;
 		const allow = {
 			allowed_mentions: self.options?.allowedMentions,
-
 			...body,
-			components: body.components?.map(x => (x instanceof ActionRow ? x.toJSON() : x)),
-			embeds: body?.embeds?.map(x => (x instanceof Embed ? x.toJSON() : x)),
+			components: body.components?.map(x => (x instanceof ActionRow ? x.toJSON() : x)) ?? undefined,
+			embeds: body.embeds?.map(x => (x instanceof Embed ? x.toJSON() : x)) ?? undefined,
 			poll: poll ? (poll instanceof PollBuilder ? poll.toJSON() : poll) : undefined,
 		};
 
@@ -191,25 +184,26 @@ export class BaseInteraction<
 					id: i,
 					...resolveAttachment(x),
 				})) ?? undefined;
-		} else if (files?.length) {
-			allow.attachments = files?.map((x, id) => ({
-				id,
-				filename: x.name,
-			})) as RESTAPIAttachment[];
+		} else if ('files' in body && body.files?.length) {
+			allow.files = await resolveFiles(body.files);
+			allow.attachments = (allow.attachments ?? []).concat(
+				allow.files.map((f, id) => ({
+					id,
+					filename: f.name,
+				})),
+			);
 		}
-		return allow as unknown as T;
+		return allow as unknown as T & { files?: RawFile[] };
 	}
 
 	private async matchReplied(body: ReplyInteractionBody) {
 		if (this.__reply) {
-			//@ts-expect-error
-			const { files, ...rest } = body.data ?? {};
-			//@ts-expect-error
-			const data = body.data instanceof Modal ? body.data : rest;
-			const parsedFiles = files ? await resolveFiles(files) : undefined;
+			const data = BaseInteraction.transformBodyRequest(body, this.client);
+			// @ts-expect-error
+			const { files, ...rest } = data.body;
 			return (this.replied = this.__reply({
-				body: BaseInteraction.transformBodyRequest({ data, type: body.type }, parsedFiles, this.client),
-				files: parsedFiles,
+				body: rest,
+				files,
 			}).then(() => (this.replied = true)));
 		}
 		return (this.replied = this.client.interactions.reply(this.id, this.token, body).then(() => (this.replied = true)));

@@ -1,28 +1,19 @@
-import { BaseInteraction, resolveFiles, type ReplyInteractionBody, Modal } from '../..';
+import { BaseInteraction, type ReplyInteractionBody } from '../..';
 import { Transformers } from '../../client/transformers';
+import type { RESTPostAPIWebhookWithTokenJSONBody } from '../../types';
 import type { InteractionMessageUpdateBodyRequest, MessageWebhookCreateBodyRequest } from '../types/write';
 import { BaseShorter } from './base';
 
 export class InteractionShorter extends BaseShorter {
 	async reply(id: string, token: string, body: ReplyInteractionBody) {
-		//@ts-expect-error
-		const { files, ...rest } = body.data ?? {};
-		//@ts-expect-error
-		const data = body.data instanceof Modal ? body.data : rest;
-		const parsedFiles = files ? await resolveFiles(files) : undefined;
-		return this.client.proxy
-			.interactions(id)(token)
-			.callback.post({
-				body: BaseInteraction.transformBodyRequest(
-					{
-						type: body.type,
-						data,
-					},
-					parsedFiles,
-					this.client,
-				),
-				files: parsedFiles,
-			});
+		const data = BaseInteraction.transformBodyRequest(body, this.client);
+		// @ts-expect-error
+		const { files, ...rest } = data.body;
+
+		return this.client.proxy.interactions(id)(token).callback.post({
+			body: rest,
+			files,
+		});
 	}
 
 	fetchResponse(token: string, messageId: string) {
@@ -34,15 +25,11 @@ export class InteractionShorter extends BaseShorter {
 	}
 
 	async editMessage(token: string, messageId: string, body: InteractionMessageUpdateBodyRequest) {
-		const { files, ...data } = body;
-		const parsedFiles = files ? await resolveFiles(files) : undefined;
-		const apiMessage = await this.client.proxy
-			.webhooks(this.client.applicationId)(token)
-			.messages(messageId)
-			.patch({
-				body: BaseInteraction.transformBody(data, parsedFiles, this.client),
-				files: parsedFiles,
-			});
+		const { files, ...parsedBody } = await BaseInteraction.transformBody(body, this.client);
+		const apiMessage = await this.client.proxy.webhooks(this.client.applicationId)(token).messages(messageId).patch({
+			body: parsedBody,
+			files,
+		});
 		return Transformers.WebhookMessage(this.client, apiMessage, this.client.applicationId, token);
 	}
 
@@ -62,14 +49,15 @@ export class InteractionShorter extends BaseShorter {
 		return this.deleteResponse(interactionId, token, '@original');
 	}
 
-	async followup(token: string, { files, ...body }: MessageWebhookCreateBodyRequest) {
-		const parsedFiles = files ? await resolveFiles(files) : undefined;
-		const apiMessage = await this.client.proxy
-			.webhooks(this.client.applicationId)(token)
-			.post({
-				body: BaseInteraction.transformBody(body, parsedFiles, this.client),
-				files: parsedFiles,
-			});
+	async followup(token: string, body: MessageWebhookCreateBodyRequest) {
+		const { files, ...parsedBody } = await BaseInteraction.transformBody<RESTPostAPIWebhookWithTokenJSONBody>(
+			body,
+			this.client,
+		);
+		const apiMessage = await this.client.proxy.webhooks(this.client.applicationId)(token).post({
+			body: parsedBody,
+			files,
+		});
 		return Transformers.WebhookMessage(this.client, apiMessage, this.client.applicationId, token);
 	}
 }

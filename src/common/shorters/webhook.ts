@@ -1,10 +1,10 @@
 import type {
 	RESTPatchAPIWebhookJSONBody,
 	RESTPatchAPIWebhookWithTokenJSONBody,
+	RESTPostAPIChannelMessageJSONBody,
 	RESTPostAPIChannelWebhookJSONBody,
 	RESTPostAPIWebhookWithTokenJSONBody,
 } from '../../types';
-import { resolveFiles } from '../../builders';
 import {
 	MessagesMethods,
 	type MessageWebhookMethodEditParams,
@@ -81,16 +81,13 @@ export class WebhookShorter extends BaseShorter {
 	 * @returns A Promise that resolves to the written message.
 	 */
 	async writeMessage(webhookId: string, token: string, { body: data, ...payload }: MessageWebhookMethodWriteParams) {
-		const { files, ...body } = data;
-		const parsedFiles = files ? await resolveFiles(files) : [];
-		const transformedBody = MessagesMethods.transformMessageBody<RESTPostAPIWebhookWithTokenJSONBody>(
-			body,
-			parsedFiles,
+		const { files, ...transformedBody } = await MessagesMethods.transformMessageBody<RESTPostAPIChannelMessageJSONBody>(
+			data,
 			this.client,
 		);
 		return this.client.proxy
 			.webhooks(webhookId)(token)
-			.post({ ...payload, files: parsedFiles, body: transformedBody })
+			.post({ ...payload, files, body: transformedBody })
 			.then(m => (m?.id ? Transformers.WebhookMessage(this.client, m, webhookId, token) : null));
 	}
 
@@ -107,17 +104,12 @@ export class WebhookShorter extends BaseShorter {
 		token: string,
 		{ messageId, body: data, ...json }: MessageWebhookMethodEditParams,
 	) {
-		const { files, ...body } = data;
-		const parsedFiles = files ? await resolveFiles(files) : [];
-		const transformedBody = MessagesMethods.transformMessageBody<RESTPostAPIWebhookWithTokenJSONBody>(
-			body,
-			parsedFiles,
-			this.client,
-		);
+		const { files, ...transformedBody } =
+			await MessagesMethods.transformMessageBody<RESTPostAPIWebhookWithTokenJSONBody>(data, this.client);
 		return this.client.proxy
 			.webhooks(webhookId)(token)
 			.messages(messageId)
-			.patch({ ...json, auth: false, files: parsedFiles, body: transformedBody })
+			.patch({ ...json, auth: false, files, body: transformedBody })
 			.then(m => Transformers.WebhookMessage(this.client, m, webhookId, token));
 	}
 

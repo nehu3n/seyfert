@@ -1,9 +1,4 @@
-import type {
-	RESTPatchAPIChannelMessageJSONBody,
-	RESTPostAPIChannelMessageJSONBody,
-	RESTPostAPIChannelMessagesThreadsJSONBody,
-} from '../../types';
-import { resolveFiles } from '../../builders';
+import type { RESTPostAPIChannelMessageJSONBody, RESTPostAPIChannelMessagesThreadsJSONBody } from '../../types';
 import { MessagesMethods } from '../../structures';
 
 import type { MessageCreateBodyRequest, MessageUpdateBodyRequest } from '../types/write';
@@ -12,19 +7,16 @@ import type { ValidAnswerId } from '../../api/Routes/channels';
 import { Transformers } from '../../client/transformers';
 
 export class MessageShorter extends BaseShorter {
-	async write(channelId: string, { files, ...body }: MessageCreateBodyRequest) {
-		const parsedFiles = files ? await resolveFiles(files) : [];
-
-		const transformedBody = MessagesMethods.transformMessageBody<RESTPostAPIChannelMessageJSONBody>(
+	async write(channelId: string, body: MessageCreateBodyRequest) {
+		const { files, ...transformedBody } = await MessagesMethods.transformMessageBody<RESTPostAPIChannelMessageJSONBody>(
 			body,
-			parsedFiles,
 			this.client,
 		);
 		return this.client.proxy
 			.channels(channelId)
 			.messages.post({
 				body: transformedBody,
-				files: parsedFiles,
+				files,
 			})
 			.then(async message => {
 				await this.client.cache.messages?.setIfNI('GuildMessages', message.id, message.channel_id, message);
@@ -32,14 +24,17 @@ export class MessageShorter extends BaseShorter {
 			});
 	}
 
-	async edit(messageId: string, channelId: string, { files, ...body }: MessageUpdateBodyRequest) {
-		const parsedFiles = files ? await resolveFiles(files) : [];
+	async edit(messageId: string, channelId: string, body: MessageUpdateBodyRequest) {
+		const { files, ...transformedBody } = await MessagesMethods.transformMessageBody<RESTPostAPIChannelMessageJSONBody>(
+			body,
+			this.client,
+		);
 		return this.client.proxy
 			.channels(channelId)
 			.messages(messageId)
 			.patch({
-				body: MessagesMethods.transformMessageBody<RESTPatchAPIChannelMessageJSONBody>(body, parsedFiles, this.client),
-				files: parsedFiles,
+				body: transformedBody,
+				files,
 			})
 			.then(async message => {
 				await this.client.cache.messages?.setIfNI('GuildMessages', message.id, message.channel_id, message);

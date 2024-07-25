@@ -9,6 +9,7 @@ import type {
 	RESTPatchAPIChannelMessageJSONBody,
 	RESTPatchAPIWebhookWithTokenMessageJSONBody,
 	RESTPostAPIChannelMessageJSONBody,
+	RESTPostAPIGuildForumThreadsJSONBody,
 	RESTPostAPIWebhookWithTokenJSONBody,
 } from '../../types';
 import type { RawFile } from '../../api';
@@ -77,3 +78,14 @@ export type InteractionCreateBodyRequest = OmitInsert<
 >;
 
 export type ModalCreateBodyRequest = APIModalInteractionResponse['data'] | Modal;
+
+export type CreateForumThread = OmitInsert<
+	RESTPostAPIGuildForumThreadsJSONBody,
+	'message',
+	{
+		message: Pick<
+			MessageCreateBodyRequest,
+			'content' | 'files' | 'embeds' | 'components' | 'attachments' | 'sticker_ids' | 'flags' | 'allowed_mentions'
+		>;
+	}
+>;

@@ -3,7 +3,6 @@ import type {
 	RESTGetAPIChannelMessagesQuery,
 	RESTPatchAPIChannelJSONBody,
 	RESTPostAPIChannelThreadsJSONBody,
-	RESTPostAPIGuildForumThreadsJSONBody,
 	APIGuildChannel,
 } from '../../types';
 import { BaseChannel, type GuildRole, type GuildMember } from '../../structures';
@@ -14,6 +13,7 @@ import { MergeOptions } from '../it/utils';
 import { type MessageStructure, Transformers } from '../../client/transformers';
 import type { MakeRequired } from '../types/util';
 import { type ChannelType, PermissionFlagsBits } from '../../types';
+import type { CreateForumThread } from '../types/write';
 
 export class ChannelShorter extends BaseShorter {
 	/**
@@ -128,9 +128,9 @@ export class ChannelShorter extends BaseShorter {
 	 * @param reason The reason for unpinning the message.
 	 * @returns A promise that resolves when the thread is succesfully created.
 	 */
-	async thread(
+	async thread<T extends 'text' | 'forum'>(
 		channelId: string,
-		body: RESTPostAPIChannelThreadsJSONBody | RESTPostAPIGuildForumThreadsJSONBody,
+		body: T extends 'text' ? RESTPostAPIChannelThreadsJSONBody : CreateForumThread,
 		reason?: string,
 	) {
 		return this.client.threads.create(channelId, body, reason);

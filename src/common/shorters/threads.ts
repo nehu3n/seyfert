@@ -5,12 +5,12 @@ import type {
 	RESTPatchAPIChannelJSONBody,
 	RESTPostAPIChannelMessagesThreadsJSONBody,
 	RESTPostAPIChannelThreadsJSONBody,
-	RESTPostAPIGuildForumThreadsJSONBody,
 } from '../../types';
-import channelFrom from '../../structures/channels';
+import channelFrom, { MessagesMethods } from '../../structures/channels';
 import { BaseShorter } from './base';
 import type { MakeRequired, When } from '../types/util';
 import type { ThreadChannelStructure } from '../../client/transformers';
+import type { CreateForumThread } from '../types/write';
 
 export class ThreadShorter extends BaseShorter {
 	/**
@@ -19,15 +19,26 @@ export class ThreadShorter extends BaseShorter {
 	 * @param reason The reason for unpinning the message.
 	 * @returns A promise that resolves when the thread is succesfully created.
 	 */
-	async create(
+	async create<T extends 'text' | 'forum'>(
 		channelId: string,
-		body: RESTPostAPIChannelThreadsJSONBody | RESTPostAPIGuildForumThreadsJSONBody,
+		body: T extends 'text' ? RESTPostAPIChannelThreadsJSONBody : CreateForumThread,
 		reason?: string,
 	) {
+		const payload: any = { reason };
+
+		if ('message' in body) {
+			const { files, ...transformedBody } =
+				await MessagesMethods.transformMessageBody<RESTPostAPIChannelThreadsJSONBody>(body.message, this.client);
+			payload.files = files;
+			payload.body = transformedBody;
+		} else {
+			payload.body = body;
+		}
+
 		return (
 			this.client.proxy
 				.channels(channelId)
-				.threads.post({ body, reason })
+				.threads.post(payload)
 				// When testing this, discord returns the thread object, but in discord api types it does not.
 				.then(thread => channelFrom(thread, this.client) as ThreadChannelStructure)
 		);

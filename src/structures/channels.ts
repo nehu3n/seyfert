@@ -5,13 +5,11 @@ import {
 	type RESTPatchAPIGuildChannelPositionsJSONBody,
 	type APIGuildChannel,
 	type RESTGetAPIChannelMessageReactionUsersQuery,
-	type RESTAPIAttachment,
 	type APITextChannel,
 	type APIGuildForumTag,
 	type ThreadAutoArchiveDuration,
 	type APIGuildForumDefaultReactionEmoji,
 	type SortOrderType,
-	type RESTPostAPIGuildForumThreadsJSONBody,
 	type RESTPostAPIChannelWebhookJSONBody,
 	type APIDMChannel,
 	type APIGuildVoiceChannel,
@@ -25,9 +23,10 @@ import {
 	ChannelType,
 	VideoQualityMode,
 } from '../types';
-import { ActionRow, Embed, PollBuilder, resolveAttachment } from '../builders';
+import { ActionRow, Embed, PollBuilder, resolveAttachment, resolveFiles } from '../builders';
 import type { UsingClient } from '../commands';
 import type {
+	CreateForumThread,
 	EmojiResolvable,
 	MessageCreateBodyRequest,
 	MessageUpdateBodyRequest,
@@ -274,11 +273,7 @@ export class MessagesMethods extends DiscordBase {
 		};
 	}
 
-	static transformMessageBody<T>(
-		body: MessageCreateBodyRequest | MessageUpdateBodyRequest,
-		files: RawFile[] | undefined,
-		self: UsingClient,
-	) {
+	static async transformMessageBody<T>(body: MessageCreateBodyRequest | MessageUpdateBodyRequest, self: UsingClient) {
 		const poll = (body as MessageCreateBodyRequest).poll;
 		const allow = {
 			allowed_mentions: self.options?.allowedMentions,
@@ -294,13 +289,16 @@ export class MessagesMethods extends DiscordBase {
 					id: i,
 					...resolveAttachment(x),
 				})) ?? undefined;
-		} else if (files?.length) {
-			allow.attachments = files?.map((x, id) => ({
-				id,
-				filename: x.name,
-			})) as RESTAPIAttachment[];
+		} else if ('files' in body && body.files?.length) {
+			allow.files = await resolveFiles(body.files);
+			allow.attachments = (allow.attachments ?? []).concat(
+				allow.files.map((f, id) => ({
+					id,
+					filename: f.name,
+				})),
+			);
 		}
-		return allow as unknown as T;
+		return allow as unknown as T & { files?: RawFile[] };
 	}
 }
 
@@ -372,7 +370,7 @@ export class ThreadOnlyMethods extends DiscordBase {
 		return this.edit({ default_thread_rate_limit_per_user: rate }, reason);
 	}
 
-	async thread(body: RESTPostAPIGuildForumThreadsJSONBody, reason?: string) {
+	async thread(body: CreateForumThread, reason?: string) {
 		return this.client.channels.thread(this.id, body, reason);
 	}
 }
