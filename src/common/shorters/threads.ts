@@ -16,14 +16,17 @@ export class ThreadShorter extends BaseShorter {
 	/**
 	 * Creates a new thread in the channel (only guild based channels).
 	 * @param channelId The ID of the parent channel.
+	 * @param body Thread params, in forum's thread `message` you must provide a value for at least one of content, embeds, sticker_ids, components, or files.
 	 * @param reason The reason for unpinning the message.
 	 * @returns A promise that resolves when the thread is succesfully created.
 	 */
-	async create<T extends 'text' | 'forum'>(
+	async create(channelId: string, body: CreateForumThread, reason?: string): Promise<ThreadChannelStructure>;
+	async create(
 		channelId: string,
-		body: T extends 'text' ? RESTPostAPIChannelThreadsJSONBody : CreateForumThread,
+		body: RESTPostAPIChannelThreadsJSONBody,
 		reason?: string,
-	) {
+	): Promise<ThreadChannelStructure>;
+	async create(channelId: string, body: RESTPostAPIChannelThreadsJSONBody | CreateForumThread, reason?: string) {
 		const payload: any = { reason };
 
 		if ('message' in body) {
